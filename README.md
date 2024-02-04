@@ -72,3 +72,146 @@ Test Scenario: We tell our app to pretend it's on the internet and ask for todos
 2.` whenPostTodo_thenCreateTodo`
 Description: We check if we can tell our app to make a new todo.
 Test Scenario: We ask our app to create a new todo, and we check if it says, "Okay, I did it!" and gives us the new todo.
+
+
+## Simple Test classes
+
+### TodoServiceJUnitTest class
+```java
+package org.example.todojunit.service;
+
+import org.example.todojunit.entity.Todo;
+import org.example.todojunit.repository.TodoRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import java.util.Arrays;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.BDDMockito.*;
+
+@SpringBootTest
+class TodoServiceJUnitTest {
+
+    @MockBean
+    private TodoRepository todoRepository;
+    private final TodoService todoService;
+
+    @Autowired
+    public TodoServiceJUnitTest(TodoService todoService) {
+        this.todoService = todoService;
+    }
+
+    @Test
+    public void whenFindAll_ReturnTodosList(){
+        // Mockup
+        Todo todo1=new Todo(1L,"FirstTodo","FirstTodoDescription","www.todo1image.com");
+        Todo todo2=new Todo(2L,"SecondTodo","SecondTodoDescription","www.todo2image.com");
+        List<Todo> todoList= Arrays.asList(todo1,todo2);
+        given(todoRepository.findAll()).willReturn(todoList);
+
+        // Assertion Test
+        assertThat(todoService.findAllTodos())
+                .contains(todo1,todo2)
+                .hasSize(2);
+    }
+
+    @Test
+    public void whenGetById_TodoShouldBeFound(){
+        // Mockup
+        Todo todo=new Todo(1L,"TodoName","TodoDescription","www.todo-image.com");
+        given(todoRepository.findById(anyLong())).willReturn(Optional.ofNullable(todo));
+
+        // Assertion Test
+        Todo result=todoService.findTodoById(1L);
+        assertThat(result.getName())
+                .containsIgnoringCase("TodoName");
+    }
+
+    @Test
+    public void whenInvalidId_TodoShouldNotBeFound(){
+        given(todoRepository.findById(anyLong())).willReturn(Optional.empty());
+        assertThrows(NoSuchElementException.class, () -> todoService.findTodoById(1L));
+    }
+}
+```
+
+### TodoControllerJUnitTest class 
+```java
+package org.example.todojunit.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.todojunit.entity.Todo;
+import org.example.todojunit.service.TodoService;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+import java.util.Arrays;
+import java.util.List;
+import static org.hamcrest.Matchers.*;
+import static org.mockito.BDDMockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@AutoConfigureMockMvc
+@RunWith(SpringRunner.class)
+public class TodoControllerJUnitTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+    @MockBean
+    private TodoService todoService;
+
+    @Test
+    public void whenGetAllTodos_thenReturnJsonArray()throws Exception{
+        // Mock up
+        Todo todo1=new Todo(1L,"FirstTodo","FirstTodoDescription","www.todo1image.com");
+        Todo todo2=new Todo(2L,"SecondTodo","SecondTodoDescription","www.todo2image.com");
+        List<Todo>todoList= Arrays.asList(todo1,todo2);
+        given(todoService.findAllTodos()).willReturn(todoList);
+
+        // Test Logic
+        mockMvc.perform(get("/api/v1/todo").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$",hasSize(2)))
+                .andExpect(jsonPath("$[0].name",equalTo(todo1.getName())));
+    }
+
+
+
+    @Test
+    public void whenPostTodo_thenCreateTodo()throws Exception{
+        Todo todo=Todo.builder()
+                .name("FirstTodo")
+                .description("FirstTodoDescription")
+                .imageUrl("www.first_todo_image.com")
+                .build();
+
+        given(todoService.saveTodo(Mockito.any(Todo.class))).willReturn(todo);
+
+        ObjectMapper mapper=new ObjectMapper();
+
+       ResultActions response= mockMvc.perform(post("/api/v1/todo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(todo)));
+       response.andExpect(status().isOk())
+               .andExpect(jsonPath("$.name",is(todo.getName())));
+    }
+}
+```
